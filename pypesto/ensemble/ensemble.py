@@ -437,8 +437,8 @@ class EnsemblePrediction:
             y_meas = np.array(y_meas)
             # bring into shape (n_t,n_y)
             y_meas = y_meas.reshape(
-                amici_objective.edatas[0].nt(),
-                amici_objective.edatas[0].nytrue(),
+                amici_objective.edatas[i_cond].nt(),
+                amici_objective.edatas[i_cond].nytrue(),
             )
             mean_traj = self.prediction_summary[MEAN].conditions[i_cond].output
             weighted_sigmas = (

@@ -1,5 +1,6 @@
 import os
 from functools import partial
+from types import SimpleNamespace
 
 import numpy as np
 import scipy.optimize as so
@@ -20,11 +21,13 @@ from pypesto.C import (
 from pypesto.engine import MultiProcessEngine
 from pypesto.ensemble import (
     Ensemble,
+    EnsemblePrediction,
     calculate_cutoff,
     read_ensemble_prediction_from_h5,
     write_ensemble_prediction_to_h5,
 )
 from pypesto.predict import AmiciPredictor
+from pypesto.result import PredictionConditionResult, PredictionResult
 
 from ..visualize import create_petab_problem
 
@@ -277,6 +280,54 @@ def test_ensemble_weighted_trajectory():
         ens_pred.prediction_summary[WEIGHTED_SIGMA].conditions[0].output,
         0.3 * np.ones((10, 1)),
         decimal=15,
+    )
+
+
+def test_ensemble_chi2_different_timepoints():
+    """
+    Test computing the chi2 for conditions with different numbers of
+    timepoints.
+    """
+    n_timepoints = (3, 5)
+    n_outputs = 2
+
+    def create_prediction_result(output_value):
+        return PredictionResult(
+            conditions=[
+                PredictionConditionResult(
+                    timepoints=np.arange(n_t),
+                    output_ids=["y1", "y2"],
+                    output=output_value * np.ones((n_t, n_outputs)),
+                    output_weight=np.log(10),
+                    output_sigmay=np.ones((n_t, n_outputs)),
+                )
+                for n_t in n_timepoints
+            ],
+            condition_ids=["c1", "c2"],
+        )
+
+    ens_pred = EnsemblePrediction(
+        prediction_results=[
+            create_prediction_result(1.0),
+            create_prediction_result(3.0),
+        ]
+    )
+
+    def create_edata(n_t, measurement):
+        return SimpleNamespace(
+            nt=lambda: n_t,
+            nytrue=lambda: n_outputs,
+            get_measurements=lambda: [measurement] * n_t * n_outputs,
+        )
+
+    # the weighted mean trajectory is 2 and the weighted sigma is 1
+    amici_objective = SimpleNamespace(
+        edatas=[create_edata(3, 1.0), create_edata(5, 4.0)]
+    )
+
+    # (1 - 2)^2 * 3 * 2 + (4 - 2)^2 * 5 * 2
+    np.testing.assert_almost_equal(
+        ens_pred.compute_chi2(amici_objective), 46.0, decimal=15
     )
 
 
